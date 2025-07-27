@@ -105,9 +105,9 @@ struct MacOSTabView: View {
                 Spacer()
                 
                 // Close button
-                if canClose {
+                if canClose && isSelected {  // Only show on selected tabs
                     CloseButton(
-                        isVisible: isSelected || isHovered,
+                        isVisible: true,  // Always visible when shown
                         isHovered: isCloseHovered,
                         action: onClose
                     )
@@ -165,10 +165,7 @@ struct CloseButton: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(isHovered ? Color(hex: "#FFFFFF") : Color(hex: "#9A9A9A"))
                 .frame(width: 14, height: 14)
-                .background(
-                    Circle()
-                        .fill(isHovered ? Color(hex: "#FF5F5F") : Color.clear)
-                )
+                // Removed red circle background
         }
         .buttonStyle(PlainButtonStyle())
         .opacity(isVisible ? 1.0 : 0.0)

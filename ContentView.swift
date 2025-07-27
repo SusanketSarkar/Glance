@@ -168,12 +168,6 @@ struct ContentView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
-                        
-                        Button("Create New Tab") {
-                            createNewTab()
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
                     }
                     
                     Text("Or drag & drop a PDF file here")
@@ -194,6 +188,7 @@ struct ContentView: View {
                 )
             }
         }
+        .navigationTitle("") // Remove window title
         .fileImporter(
             isPresented: $showingFileImporter,
             allowedContentTypes: [.pdf],

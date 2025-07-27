@@ -47,26 +47,21 @@ struct TitleBarTab: View {
         HStack(spacing: 4) {
             Text(tab.displayTitle)
                 .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                .foregroundColor(isSelected ? .primary : .secondary)
+                .foregroundColor(textColor) // Use computed property for better color management
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: 140) // Limit tab width
             
-            if canClose && (isSelected || isHovered) {
+            // Only show close button on selected tabs
+            if canClose && isSelected {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
                         .frame(width: 12, height: 12)
-                        .background(
-                            Circle()
-                                .fill(isHovered ? Color.red.opacity(0.8) : Color.clear)
-                        )
+                        // Removed red circle background
                 }
                 .buttonStyle(PlainButtonStyle())
-                .onHover { hovering in
-                    // Handle close button hover separately
-                }
             }
         }
         .padding(.horizontal, 8)
@@ -87,6 +82,17 @@ struct TitleBarTab: View {
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
+        }
+    }
+    
+    // Computed property for text color with better hover effect
+    private var textColor: Color {
+        if isSelected {
+            return .primary
+        } else if isHovered {
+            return Color.primary.opacity(0.8) // Slightly brighter when hovering inactive tabs
+        } else {
+            return .secondary
         }
     }
     
