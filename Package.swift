@@ -31,7 +31,8 @@ let package = Package(
                 "PDFViewWrapper.swift",
                 "DocumentTab.swift",
                 "TabBarView.swift",
-                "TitleBarTabView.swift"
+                "TitleBarTabView.swift",
+                "FloatingContextToolbar.swift"
             ]
         )
     ]

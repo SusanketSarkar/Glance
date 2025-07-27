@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 // Custom NSView that wraps PDFView and handles trackpad gestures
 class TrackpadEnabledView: NSView {
     let pdfView = PDFView()
-    weak var coordinator: PDFViewWrapper.Coordinator?
+    weak var coordinator: PDFViewRepresentable.Coordinator?
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -53,15 +53,101 @@ class TrackpadEnabledView: NSView {
         print("🎯 Rotate gesture detected! Rotation: \(event.rotation)")
         super.rotate(with: event)
     }
+    
+    // Handle mouse clicks to dismiss toolbar when clicking outside selection
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        
+        // Small delay to allow text selection to update first
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if self.pdfView.currentSelection == nil || self.pdfView.currentSelection?.string?.isEmpty == true {
+                self.coordinator?.dismissToolbar()
+            }
+        }
+    }
 }
 
-struct PDFViewWrapper: NSViewRepresentable {
+struct PDFViewWrapper: View {
     let document: PDFDocument
     @Binding var currentPage: Int
     @Binding var totalPages: Int
     @Binding var zoomLevel: CGFloat
     @Binding var searchText: String
     let updateTrigger: Int // Forces updates when this changes
+    
+    // Text selection state
+    @State private var selectedTextFrame: CGRect = .zero
+    @State private var isToolbarVisible: Bool = false
+    @State private var selectedText: String = ""
+    @State private var containerBounds: CGRect = .zero
+    @State private var selectionTimer: Timer?
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                PDFViewRepresentable(
+                    document: document,
+                    currentPage: $currentPage,
+                    totalPages: $totalPages,
+                    zoomLevel: $zoomLevel,
+                    searchText: $searchText,
+                    updateTrigger: updateTrigger,
+                    selectedTextFrame: $selectedTextFrame,
+                    isToolbarVisible: $isToolbarVisible,
+                    selectedText: $selectedText,
+                    containerBounds: $containerBounds
+                )
+                
+                FloatingContextToolbar(
+                    selectedTextFrame: selectedTextFrame,
+                    containerBounds: containerBounds,
+                    isVisible: $isToolbarVisible,
+                    onUnderline: { handleUnderline() },
+                    onHighlight: { handleHighlight() },
+                    onDismiss: { dismissToolbar() }
+                )
+            }
+            .onAppear {
+                containerBounds = geometry.frame(in: .local)
+            }
+            .onChange(of: geometry.size) { _ in
+                containerBounds = geometry.frame(in: .local)
+            }
+        }
+    }
+    
+    private func handleUnderline() {
+        print("Underline text: \(selectedText)")
+        // TODO: Implement text underlining
+        dismissToolbar()
+    }
+    
+    private func handleHighlight() {
+        print("Highlight text: \(selectedText)")
+        // TODO: Implement text highlighting
+        dismissToolbar()
+    }
+    
+    private func dismissToolbar() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            isToolbarVisible = false
+        }
+    }
+}
+
+struct PDFViewRepresentable: NSViewRepresentable {
+    let document: PDFDocument
+    @Binding var currentPage: Int
+    @Binding var totalPages: Int
+    @Binding var zoomLevel: CGFloat
+    @Binding var searchText: String
+    let updateTrigger: Int
+    
+    // Text selection bindings
+    @Binding var selectedTextFrame: CGRect
+    @Binding var isToolbarVisible: Bool
+    @Binding var selectedText: String
+    @Binding var containerBounds: CGRect
 
     func makeNSView(context: Context) -> TrackpadEnabledView {
         let containerView = TrackpadEnabledView()
@@ -103,11 +189,32 @@ struct PDFViewWrapper: NSViewRepresentable {
             object: pdfView
         )
         
+        // Add text selection observer
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.textSelectionChanged),
+            name: .PDFViewSelectionChanged,
+            object: pdfView
+        )
+        
         return containerView
     }
     
     func updateNSView(_ containerView: TrackpadEnabledView, context: Context) {
         let pdfView = containerView.pdfView
+        
+        // Update container bounds with actual view size
+        DispatchQueue.main.async {
+            self.containerBounds = containerView.bounds
+        }
+        
+        // Update coordinator bindings
+        context.coordinator.updateBindings(
+            selectedTextFrame: $selectedTextFrame,
+            isToolbarVisible: $isToolbarVisible,
+            selectedText: $selectedText,
+            containerBounds: $containerBounds
+        )
         
         // Update document if it has changed (crucial for tab switching)
         if pdfView.document != document {
@@ -143,11 +250,25 @@ struct PDFViewWrapper: NSViewRepresentable {
     }
     
     class Coordinator: NSObject, PDFViewDelegate {
-        let parent: PDFViewWrapper
+        let parent: PDFViewRepresentable
         private var currentSearchText = ""
+        private var selectionTimer: Timer?
         
-        init(_ parent: PDFViewWrapper) {
+        // Text selection bindings
+        var selectedTextFrame: Binding<CGRect>?
+        var isToolbarVisible: Binding<Bool>?
+        var selectedText: Binding<String>?
+        var containerBounds: Binding<CGRect>?
+        
+        init(_ parent: PDFViewRepresentable) {
             self.parent = parent
+        }
+        
+        func updateBindings(selectedTextFrame: Binding<CGRect>, isToolbarVisible: Binding<Bool>, selectedText: Binding<String>, containerBounds: Binding<CGRect>) {
+            self.selectedTextFrame = selectedTextFrame
+            self.isToolbarVisible = isToolbarVisible
+            self.selectedText = selectedText
+            self.containerBounds = containerBounds
         }
         
         // Called by TrackpadEnabledView when trackpad gestures change zoom
@@ -201,7 +322,69 @@ struct PDFViewWrapper: NSViewRepresentable {
             currentSearchText = ""
         }
         
-
+        @objc func textSelectionChanged(_ notification: Notification) {
+            guard let pdfView = notification.object as? PDFView else { return }
+            
+            // Cancel any existing timer
+            selectionTimer?.invalidate()
+            
+            DispatchQueue.main.async {
+                if let selection = pdfView.currentSelection, let selectionString = selection.string, !selectionString.isEmpty {
+                    // Get the bounds of the selected text in PDF coordinates
+                    let selectionBounds = selection.bounds(for: pdfView.currentPage!)
+                    
+                    // Convert to view coordinates (this gives us NSView coordinates)
+                    let viewBounds = pdfView.convert(selectionBounds, from: pdfView.currentPage!)
+                    
+                    // Convert NSView coordinates to SwiftUI coordinates
+                    // NSView has origin at bottom-left, SwiftUI has origin at top-left
+                    let containerHeight = pdfView.bounds.height
+                    let swiftUIBounds = CGRect(
+                        x: viewBounds.origin.x,
+                        y: containerHeight - viewBounds.origin.y - viewBounds.height,
+                        width: viewBounds.width,
+                        height: viewBounds.height
+                    )
+                    
+                    print("🎯 Selection bounds - PDF: \(selectionBounds), NSView: \(viewBounds), SwiftUI: \(swiftUIBounds)")
+                    
+                    // Update the selection data immediately
+                    self.selectedTextFrame?.wrappedValue = swiftUIBounds
+                    self.selectedText?.wrappedValue = selectionString
+                    
+                    // Hide toolbar immediately during selection
+                    self.isToolbarVisible?.wrappedValue = false
+                    
+                    // Set a timer to show the toolbar after selection is complete (500ms delay)
+                    self.selectionTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                        DispatchQueue.main.async {
+                            // Check if selection is still active before showing toolbar
+                            if let selection = pdfView.currentSelection, let selectionString = selection.string, !selectionString.isEmpty {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    self.isToolbarVisible?.wrappedValue = true
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Hide the toolbar when no text is selected
+                    self.dismissToolbar()
+                }
+            }
+        }
+        
+        func dismissToolbar() {
+            // Cancel any pending timer
+            selectionTimer?.invalidate()
+            
+            DispatchQueue.main.async {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    self.isToolbarVisible?.wrappedValue = false
+                }
+                self.selectedText?.wrappedValue = ""
+                self.selectedTextFrame?.wrappedValue = .zero
+            }
+        }
         
         // PDFViewDelegate methods
         func pdfViewWillClick(onLink sender: PDFView, with url: URL) {
@@ -222,7 +405,7 @@ struct PDFViewWrapper_Previews: PreviewProvider {
                 totalPages: .constant(document.pageCount),
                 zoomLevel: .constant(1.0),
                 searchText: .constant(""),
-                updateTrigger: 0 // Added updateTrigger for preview
+                updateTrigger: 0
             )
         } else {
             Text("No sample PDF found")
