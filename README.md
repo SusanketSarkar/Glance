@@ -1,4 +1,4 @@
-# Glance - AI-Powered PDF Reader for macOS
+# Glance - AI-Powered OFFLINE PDF Reader for macOS
 
 A minimalist, privacy-first PDF reader built for macOS with AI-powered features.
 
