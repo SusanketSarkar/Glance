@@ -28,7 +28,10 @@ let package = Package(
             sources: [
                 "GlanceApp.swift",
                 "ContentView.swift",
-                "PDFViewWrapper.swift"
+                "PDFViewWrapper.swift",
+                "DocumentTab.swift",
+                "TabBarView.swift",
+                "TitleBarTabView.swift"
             ]
         )
     ]

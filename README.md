@@ -4,11 +4,12 @@ A minimalist, privacy-first PDF reader built for macOS with AI-powered features.
 
 ## Features
 
+- **Sleek macOS Tab Interface** - Chrome-style tabs positioned right next to traffic light buttons
 - **Clean, Native macOS Interface** - Built with SwiftUI for a modern, responsive experience
 - **Fast PDF Viewing** - Powered by Apple's PDFKit with smooth continuous scrolling
 - **Search Functionality** - Find text within documents quickly
 - **Drag & Drop Support** - Simply drag PDF files into the app
-- **Zoom Controls** - Precise zoom control with keyboard shortcuts
+- **✅ Native Trackpad Gestures** - Perfect pinch-to-zoom with two-finger trackpad gestures
 - **Page Navigation** - Easy navigation through multi-page documents
 - **Dark Mode Support** - Automatically follows system appearance
 
@@ -53,26 +54,45 @@ This creates a basic executable that runs the GUI app.
 
 ## Usage
 
-1. **Opening PDFs**:
+1. **Tab Management**:
+   - Sleek tabs positioned right next to macOS traffic light buttons
+   - Click the "+" button to create new tabs
+   - Click on tabs to switch between documents
+   - Hover over tabs to see close buttons (×)
+   - Drag and drop PDFs to open in current or new tabs
+
+2. **Opening PDFs**:
    - Click "Open PDF Document" or use ⌘+O
    - Drag and drop PDF files directly into the app window
 
-2. **Navigation**:
+3. **Navigation**:
    - Scroll continuously through all pages in the document
    - Use the arrow buttons to jump to specific pages
    - Smooth scrolling through the entire document
 
-3. **Search**:
+4. **Search**:
    - Type in the search bar to find text within the document
    - Press Enter to execute the search
+   - Search is per-tab, each document maintains its own search
 
-4. **Zoom**:
-   - Use the zoom controls in the toolbar
-   - Click the "1x" button to reset zoom to 100%
+5. **Zoom**:
+   - **✅ Pinch-to-zoom** - Two-finger trackpad gestures work perfectly (25% to 500%)
+   - **Scroll wheel zoom** - Use scroll wheel with modifier keys for zooming
+   - **Button controls** - Toolbar zoom buttons for precise 25% increments  
+   - **Reset zoom** - Click the "1x" button to instantly return to 100%
 
 ## Keyboard Shortcuts
 
+### File Operations
 - `⌘+O` - Open PDF file
+- `⌘+T` - New tab  
+- `⌘+W` - Close current tab
+
+### Tab Navigation
+- `⌘+Shift+]` - Next tab
+- `⌘+Shift+[` - Previous tab
+
+### Document Navigation
 - `←/→` - Navigate pages
 - `⌘++` - Zoom in
 - `⌘+-` - Zoom out

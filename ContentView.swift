@@ -3,12 +3,51 @@ import PDFKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @State private var pdfDocument: PDFDocument?
+    @State private var tabs: [DocumentTab] = [DocumentTab()]
+    @State private var selectedTabIndex: Int = 0
     @State private var showingFileImporter = false
-    @State private var searchText = ""
-    @State private var currentPage = 1
-    @State private var totalPages = 0
-    @State private var zoomLevel: CGFloat = 1.0
+    @State private var updateTrigger: Int = 0 // Force PDFViewWrapper updates
+    
+    private var selectedTab: DocumentTab {
+        guard selectedTabIndex < tabs.count else {
+            return tabs.first ?? DocumentTab()
+        }
+        return tabs[selectedTabIndex]
+    }
+    
+    // Bindings for selected tab properties
+    private var selectedTabSearchText: Binding<String> {
+        Binding(
+            get: { self.selectedTab.searchText },
+            set: { self.tabs[self.selectedTabIndex].searchText = $0 }
+        )
+    }
+    
+    private var selectedTabCurrentPage: Binding<Int> {
+        Binding(
+            get: { self.selectedTab.currentPage },
+            set: { self.tabs[self.selectedTabIndex].currentPage = $0 }
+        )
+    }
+    
+    private var selectedTabTotalPages: Binding<Int> {
+        Binding(
+            get: { self.selectedTab.totalPages },
+            set: { self.tabs[self.selectedTabIndex].totalPages = $0 }
+        )
+    }
+    
+    private var selectedTabZoomLevel: Binding<CGFloat> {
+        Binding(
+            get: { 
+                let value = self.selectedTab.zoomLevel
+                return value
+            },
+            set: { newValue in
+                self.tabs[self.selectedTabIndex].zoomLevel = newValue
+            }
+        )
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -28,7 +67,7 @@ struct ContentView: View {
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
-                    TextField("Search in document...", text: $searchText)
+                    TextField("Search in document...", text: selectedTabSearchText)
                         .textFieldStyle(PlainTextFieldStyle())
                         .onSubmit {
                             performSearch()
@@ -43,14 +82,14 @@ struct ContentView: View {
                 Spacer()
                 
                 // Page navigation
-                if totalPages > 0 {
+                if selectedTab.totalPages > 0 {
                     HStack {
                         Button(action: previousPage) {
                             Image(systemName: "chevron.left")
                         }
-                        .disabled(currentPage <= 1)
+                        .disabled(selectedTab.currentPage <= 1)
                         
-                        Text("\(currentPage) / \(totalPages)")
+                        Text("\(selectedTab.currentPage) / \(selectedTab.totalPages)")
                             .font(.caption)
                             .monospacedDigit()
                             .frame(minWidth: 60)
@@ -58,7 +97,7 @@ struct ContentView: View {
                         Button(action: nextPage) {
                             Image(systemName: "chevron.right")
                         }
-                        .disabled(currentPage >= totalPages)
+                        .disabled(selectedTab.currentPage >= selectedTab.totalPages)
                     }
                     
                     Divider()
@@ -69,9 +108,9 @@ struct ContentView: View {
                         Button(action: zoomOut) {
                             Image(systemName: "minus.magnifyingglass")
                         }
-                        .disabled(zoomLevel <= 0.5)
+                        .disabled(selectedTab.zoomLevel <= 0.25)
                         
-                        Text("\(Int(zoomLevel * 100))%")
+                        Text("\(Int(selectedTab.zoomLevel * 100))%")
                             .font(.caption)
                             .monospacedDigit()
                             .frame(minWidth: 40)
@@ -79,7 +118,7 @@ struct ContentView: View {
                         Button(action: zoomIn) {
                             Image(systemName: "plus.magnifyingglass")
                         }
-                        .disabled(zoomLevel >= 3.0)
+                        .disabled(selectedTab.zoomLevel >= 5.0)
                         
                         Button(action: resetZoom) {
                             Image(systemName: "1.magnifyingglass")
@@ -99,12 +138,13 @@ struct ContentView: View {
             )
             
             // PDF Content
-            if let document = pdfDocument {
+            if let document = selectedTab.document {
                 PDFViewWrapper(document: document, 
-                             currentPage: $currentPage, 
-                             totalPages: $totalPages,
-                             zoomLevel: $zoomLevel,
-                             searchText: $searchText)
+                             currentPage: selectedTabCurrentPage, 
+                             totalPages: selectedTabTotalPages,
+                             zoomLevel: selectedTabZoomLevel,
+                             searchText: selectedTabSearchText,
+                             updateTrigger: updateTrigger)
             } else {
                 // Welcome screen
                 VStack(spacing: 20) {
@@ -122,11 +162,19 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    Button("Open PDF Document") {
-                        openPDF()
+                    HStack(spacing: 16) {
+                        Button("Open PDF Document") {
+                            openPDF()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        
+                        Button("Create New Tab") {
+                            createNewTab()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                     
                     Text("Or drag & drop a PDF file here")
                         .font(.caption)
@@ -134,6 +182,16 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(NSColor.textBackgroundColor))
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                TitleBarTabView(
+                    tabs: $tabs,
+                    selectedTabIndex: $selectedTabIndex,
+                    onNewTab: createNewTab,
+                    onCloseTab: closeTab
+                )
             }
         }
         .fileImporter(
@@ -152,6 +210,25 @@ struct ContentView: View {
     
     private func openPDF() {
         showingFileImporter = true
+    }
+    
+    private func createNewTab() {
+        let newTab = DocumentTab()
+        tabs.append(newTab)
+        selectedTabIndex = tabs.count - 1
+    }
+    
+    private func closeTab(at index: Int) {
+        guard tabs.count > 1 && index < tabs.count else { return }
+        
+        tabs.remove(at: index)
+        
+        // Adjust selected tab index if necessary
+        if selectedTabIndex >= tabs.count {
+            selectedTabIndex = tabs.count - 1
+        } else if selectedTabIndex > index {
+            selectedTabIndex -= 1
+        }
     }
     
     private func handleFileSelection(_ result: Result<[URL], Error>) {
@@ -179,40 +256,38 @@ struct ContentView: View {
     }
     
     private func loadPDF(from url: URL) {
-        if let document = PDFDocument(url: url) {
-            self.pdfDocument = document
-            self.totalPages = document.pageCount
-            self.currentPage = 1
-            self.zoomLevel = 1.0
-        }
+        selectedTab.loadPDF(from: url)
     }
     
     private func performSearch() {
         // Search functionality will be implemented later
-        print("Searching for: \(searchText)")
+        print("Searching for: \(selectedTab.searchText)")
     }
     
     private func previousPage() {
-        if currentPage > 1 {
-            currentPage -= 1
+        if selectedTab.currentPage > 1 {
+            selectedTab.currentPage -= 1
         }
     }
     
     private func nextPage() {
-        if currentPage < totalPages {
-            currentPage += 1
+        if selectedTab.currentPage < selectedTab.totalPages {
+            selectedTab.currentPage += 1
         }
     }
     
     private func zoomIn() {
-        zoomLevel = min(zoomLevel + 0.25, 3.0)
+        selectedTabZoomLevel.wrappedValue = min(selectedTabZoomLevel.wrappedValue + 0.25, 5.0)
+        updateTrigger += 1 // Force PDFViewWrapper update
     }
     
     private func zoomOut() {
-        zoomLevel = max(zoomLevel - 0.25, 0.5)
+        selectedTabZoomLevel.wrappedValue = max(selectedTabZoomLevel.wrappedValue - 0.25, 0.25)
+        updateTrigger += 1 // Force PDFViewWrapper update
     }
     
     private func resetZoom() {
-        zoomLevel = 1.0
+        selectedTabZoomLevel.wrappedValue = 1.0
+        updateTrigger += 1 // Force PDFViewWrapper update
     }
 } 
