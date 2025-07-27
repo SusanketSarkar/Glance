@@ -1,6 +1,6 @@
 import SwiftUI
 import PDFKit
-import AppKit
+import UniformTypeIdentifiers
 
 // Custom NSView that wraps PDFView and handles trackpad gestures
 class TrackpadEnabledView: NSView {
