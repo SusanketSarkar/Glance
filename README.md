@@ -5,7 +5,7 @@ A minimalist, privacy-first PDF reader built for macOS with AI-powered features.
 ## Features
 
 - **Clean, Native macOS Interface** - Built with SwiftUI for a modern, responsive experience
-- **Fast PDF Viewing** - Powered by Apple's PDFKit for optimal performance
+- **Fast PDF Viewing** - Powered by Apple's PDFKit with smooth continuous scrolling
 - **Search Functionality** - Find text within documents quickly
 - **Drag & Drop Support** - Simply drag PDF files into the app
 - **Zoom Controls** - Precise zoom control with keyboard shortcuts
@@ -58,8 +58,9 @@ This creates a basic executable that runs the GUI app.
    - Drag and drop PDF files directly into the app window
 
 2. **Navigation**:
-   - Use the arrow buttons or keyboard arrows to navigate pages
-   - Scroll to move through the document
+   - Scroll continuously through all pages in the document
+   - Use the arrow buttons to jump to specific pages
+   - Smooth scrolling through the entire document
 
 3. **Search**:
    - Type in the search bar to find text within the document

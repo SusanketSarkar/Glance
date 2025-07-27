@@ -50,7 +50,7 @@ playground.xcworkspace
 
 .build/
 
-.docs/
+docs/
 
 # CocoaPods
 #

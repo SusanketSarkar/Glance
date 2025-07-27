@@ -11,12 +11,16 @@ struct PDFViewWrapper: NSViewRepresentable {
     func makeNSView(context: Context) -> PDFView {
         let pdfView = PDFView()
         
-        // Configure PDF view
+        // Configure PDF view for continuous scrolling
         pdfView.document = document
         pdfView.autoScales = true
-        pdfView.displayMode = .singlePage
+        pdfView.displayMode = .singlePageContinuous  // Enables continuous scrolling through all pages
         pdfView.displayDirection = .vertical
         pdfView.backgroundColor = NSColor.textBackgroundColor
+        
+        // Enable smooth scrolling and better page transitions
+        pdfView.interpolationQuality = .high  // High-quality rendering during zoom/scroll
+        pdfView.enableDataDetectors = true    // Detect links, phone numbers, etc.
         
         // Enable selection and highlighting
         // Note: Some properties may not be available in all macOS versions
