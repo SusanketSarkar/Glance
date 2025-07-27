@@ -32,7 +32,8 @@ let package = Package(
                 "DocumentTab.swift",
                 "TabBarView.swift",
                 "TitleBarTabView.swift",
-                "FloatingContextToolbar.swift"
+                "FloatingContextToolbar.swift",
+                "ColorPickerPopup.swift"
             ]
         )
     ]

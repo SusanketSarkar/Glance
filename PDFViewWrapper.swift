@@ -2,6 +2,26 @@ import SwiftUI
 import PDFKit
 import UniformTypeIdentifiers
 
+// Extension to convert SwiftUI Color to NSColor
+extension NSColor {
+    convenience init(_ color: Color) {
+        // Convert common colors to NSColor
+        switch color {
+        case .red:
+            self.init(red: 1, green: 0, blue: 0, alpha: 0.5)
+        case .green:
+            self.init(red: 0, green: 1, blue: 0, alpha: 0.5)
+        case .yellow:
+            self.init(red: 1, green: 1, blue: 0, alpha: 0.5)
+        case .blue:
+            self.init(red: 0, green: 0, blue: 1, alpha: 0.5)
+        default:
+            // For magenta and others
+            self.init(red: 1, green: 0, blue: 1, alpha: 0.5)
+        }
+    }
+}
+
 // Custom NSView that wraps PDFView and handles trackpad gestures
 class TrackpadEnabledView: NSView {
     let pdfView = PDFView()
@@ -81,6 +101,7 @@ struct PDFViewWrapper: View {
     @State private var selectedText: String = ""
     @State private var containerBounds: CGRect = .zero
     @State private var selectionTimer: Timer?
+    @State private var highlightColor: Color?
     
     var body: some View {
         GeometryReader { geometry in
@@ -95,7 +116,8 @@ struct PDFViewWrapper: View {
                     selectedTextFrame: $selectedTextFrame,
                     isToolbarVisible: $isToolbarVisible,
                     selectedText: $selectedText,
-                    containerBounds: $containerBounds
+                    containerBounds: $containerBounds,
+                    highlightColor: $highlightColor
                 )
                 
                 FloatingContextToolbar(
@@ -103,7 +125,7 @@ struct PDFViewWrapper: View {
                     containerBounds: containerBounds,
                     isVisible: $isToolbarVisible,
                     onUnderline: { handleUnderline() },
-                    onHighlight: { handleHighlight() },
+                    onHighlight: { color in handleHighlight(color: color) },
                     onDismiss: { dismissToolbar() }
                 )
             }
@@ -122,9 +144,12 @@ struct PDFViewWrapper: View {
         dismissToolbar()
     }
     
-    private func handleHighlight() {
-        print("Highlight text: \(selectedText)")
-        // TODO: Implement text highlighting
+    private func handleHighlight(color: Color) {
+        print("Highlight text: \(selectedText) with color: \(color)")
+        
+        // Trigger highlighting by setting the color
+        highlightColor = color
+        
         dismissToolbar()
     }
     
@@ -148,6 +173,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
     @Binding var isToolbarVisible: Bool
     @Binding var selectedText: String
     @Binding var containerBounds: CGRect
+    @Binding var highlightColor: Color?
 
     func makeNSView(context: Context) -> TrackpadEnabledView {
         let containerView = TrackpadEnabledView()
@@ -197,6 +223,24 @@ struct PDFViewRepresentable: NSViewRepresentable {
             object: pdfView
         )
         
+        // Add scroll observer to track view changes
+        if let scrollView = pdfView.documentView?.enclosingScrollView {
+            NotificationCenter.default.addObserver(
+                context.coordinator,
+                selector: #selector(Coordinator.viewBoundsChanged),
+                name: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView
+            )
+        }
+        
+        // Also observe the PDFView itself for bounds changes
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.viewBoundsChanged),
+            name: NSView.boundsDidChangeNotification,
+            object: pdfView
+        )
+        
         return containerView
     }
     
@@ -213,7 +257,8 @@ struct PDFViewRepresentable: NSViewRepresentable {
             selectedTextFrame: $selectedTextFrame,
             isToolbarVisible: $isToolbarVisible,
             selectedText: $selectedText,
-            containerBounds: $containerBounds
+            containerBounds: $containerBounds,
+            highlightColor: $highlightColor
         )
         
         // Update document if it has changed (crucial for tab switching)
@@ -254,21 +299,40 @@ struct PDFViewRepresentable: NSViewRepresentable {
         private var currentSearchText = ""
         private var selectionTimer: Timer?
         
+        // Text selection tracking
+        private var currentSelection: PDFSelection?
+        private var currentPDFView: PDFView?
+        
         // Text selection bindings
         var selectedTextFrame: Binding<CGRect>?
         var isToolbarVisible: Binding<Bool>?
         var selectedText: Binding<String>?
         var containerBounds: Binding<CGRect>?
+        var highlightColor: Binding<Color?>?
         
         init(_ parent: PDFViewRepresentable) {
             self.parent = parent
         }
         
-        func updateBindings(selectedTextFrame: Binding<CGRect>, isToolbarVisible: Binding<Bool>, selectedText: Binding<String>, containerBounds: Binding<CGRect>) {
+        func updateBindings(selectedTextFrame: Binding<CGRect>, isToolbarVisible: Binding<Bool>, selectedText: Binding<String>, containerBounds: Binding<CGRect>, highlightColor: Binding<Color?>?) {
             self.selectedTextFrame = selectedTextFrame
             self.isToolbarVisible = isToolbarVisible
             self.selectedText = selectedText
             self.containerBounds = containerBounds
+            
+            // Check if highlight color changed and perform highlighting
+            if let newColorBinding = highlightColor,
+               let newColor = newColorBinding.wrappedValue,
+               newColor != self.highlightColor?.wrappedValue {
+                self.highlightColor = newColorBinding
+                performHighlighting(with: newColor)
+                // Reset the color after highlighting
+                DispatchQueue.main.async {
+                    newColorBinding.wrappedValue = nil
+                }
+            } else {
+                self.highlightColor = highlightColor
+            }
         }
         
         // Called by TrackpadEnabledView when trackpad gestures change zoom
@@ -330,26 +394,14 @@ struct PDFViewRepresentable: NSViewRepresentable {
             
             DispatchQueue.main.async {
                 if let selection = pdfView.currentSelection, let selectionString = selection.string, !selectionString.isEmpty {
-                    // Get the bounds of the selected text in PDF coordinates
-                    let selectionBounds = selection.bounds(for: pdfView.currentPage!)
+                    // Store current selection and PDFView for scroll tracking
+                    self.currentSelection = selection
+                    self.currentPDFView = pdfView
                     
-                    // Convert to view coordinates (this gives us NSView coordinates)
-                    let viewBounds = pdfView.convert(selectionBounds, from: pdfView.currentPage!)
+                    // Calculate initial position
+                    self.updateToolbarPositionWithVisibilityCheck()
                     
-                    // Convert NSView coordinates to SwiftUI coordinates
-                    // NSView has origin at bottom-left, SwiftUI has origin at top-left
-                    let containerHeight = pdfView.bounds.height
-                    let swiftUIBounds = CGRect(
-                        x: viewBounds.origin.x,
-                        y: containerHeight - viewBounds.origin.y - viewBounds.height,
-                        width: viewBounds.width,
-                        height: viewBounds.height
-                    )
-                    
-                    print("🎯 Selection bounds - PDF: \(selectionBounds), NSView: \(viewBounds), SwiftUI: \(swiftUIBounds)")
-                    
-                    // Update the selection data immediately
-                    self.selectedTextFrame?.wrappedValue = swiftUIBounds
+                    // Update the selection text
                     self.selectedText?.wrappedValue = selectionString
                     
                     // Hide toolbar immediately during selection
@@ -367,15 +419,136 @@ struct PDFViewRepresentable: NSViewRepresentable {
                         }
                     }
                 } else {
+                    // Clear stored selection
+                    self.currentSelection = nil
+                    self.currentPDFView = nil
                     // Hide the toolbar when no text is selected
                     self.dismissToolbar()
                 }
             }
         }
         
+        @objc func viewBoundsChanged(_ notification: Notification) {
+            // Update toolbar position when view bounds change (scrolling, zooming)
+            DispatchQueue.main.async {
+                // Always check current selection state, don't rely on cached data
+                self.updateToolbarPositionWithVisibilityCheck()
+            }
+        }
+        
+        private func updateToolbarPositionWithVisibilityCheck() {
+            guard let pdfView = currentPDFView else { return }
+            
+            // Get the CURRENT selection from PDFView (not cached)
+            // This ensures we get the live, up-to-date selection state
+            guard let liveSelection = pdfView.currentSelection,
+                  let selectionString = liveSelection.string,
+                  !selectionString.isEmpty else {
+                // No current selection, hide toolbar
+                withAnimation(.easeOut(duration: 0.15)) {
+                    self.isToolbarVisible?.wrappedValue = false
+                }
+                return
+            }
+            
+            // Find which page the selection is on
+            var targetPage: PDFPage?
+            var selectionBounds = CGRect.zero
+            
+            for pageIndex in 0..<pdfView.document!.pageCount {
+                if let page = pdfView.document!.page(at: pageIndex) {
+                    let pageBounds = liveSelection.bounds(for: page)
+                    if !pageBounds.isEmpty {
+                        targetPage = page
+                        selectionBounds = pageBounds
+                        break
+                    }
+                }
+            }
+            
+            guard let page = targetPage else { return }
+            
+            // Convert PDF page coordinates to current PDFView coordinates
+            // This should account for current zoom and scroll state
+            let viewBounds = pdfView.convert(selectionBounds, from: page)
+            
+            // Convert NSView coordinates to SwiftUI coordinates
+            // NSView has origin at bottom-left, SwiftUI has origin at top-left
+            let containerHeight = pdfView.bounds.height
+            let swiftUIBounds = CGRect(
+                x: viewBounds.origin.x,
+                y: containerHeight - viewBounds.origin.y - viewBounds.height,
+                width: viewBounds.width,
+                height: viewBounds.height
+            )
+            
+            print("🎯 Live selection - Page: \(selectionBounds), View: \(viewBounds), SwiftUI: \(swiftUIBounds), Container: \(containerHeight)")
+            
+            // Update position
+            self.selectedTextFrame?.wrappedValue = swiftUIBounds
+            
+            // Show/hide toolbar based on visibility  
+            let isVisible = swiftUIBounds.minY >= -50 && swiftUIBounds.maxY <= containerHeight + 50 &&
+                           swiftUIBounds.minX >= -50 && swiftUIBounds.maxX <= pdfView.bounds.width + 50
+            
+            if isVisible && self.isToolbarVisible?.wrappedValue == false {
+                // Show toolbar when selection comes back into view
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.isToolbarVisible?.wrappedValue = true
+                }
+            } else if !isVisible && self.isToolbarVisible?.wrappedValue == true {
+                // Hide toolbar when selection goes off-screen
+                withAnimation(.easeOut(duration: 0.15)) {
+                    self.isToolbarVisible?.wrappedValue = false
+                }
+            }
+        }
+        
+
+        
+        private func performHighlighting(with color: Color) {
+            guard let pdfView = currentPDFView,
+                  let selection = pdfView.currentSelection else { return }
+            
+            print("🎨 Performing highlighting with color: \(color)")
+            
+            // Find the page containing the selection
+            for pageIndex in 0..<pdfView.document!.pageCount {
+                if let page = pdfView.document!.page(at: pageIndex) {
+                    let selectionBounds = selection.bounds(for: page)
+                    if !selectionBounds.isEmpty {
+                        // Create a highlight annotation
+                        let annotation = PDFAnnotation(bounds: selectionBounds, forType: .highlight, withProperties: nil)
+                        
+                        // Convert SwiftUI Color to NSColor
+                        let nsColor = NSColor(color)
+                        annotation.color = nsColor
+                        
+                        // Set annotation properties
+                        annotation.contents = "Highlighted text: \(selection.string ?? "")"
+                        
+                        // Add annotation to the page
+                        page.addAnnotation(annotation)
+                        
+                        print("✅ Added highlight annotation to page \(pageIndex)")
+                        break
+                    }
+                }
+            }
+            
+            // Clear the selection after highlighting
+            DispatchQueue.main.async {
+                pdfView.clearSelection()
+            }
+        }
+        
         func dismissToolbar() {
             // Cancel any pending timer
             selectionTimer?.invalidate()
+            
+            // Clear stored selection
+            currentSelection = nil
+            currentPDFView = nil
             
             DispatchQueue.main.async {
                 withAnimation(.easeOut(duration: 0.15)) {
