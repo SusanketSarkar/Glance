@@ -82,14 +82,14 @@ struct ContentView: View {
                 Spacer()
                 
                 // Page navigation
-                if selectedTab.totalPages > 0 {
+                if selectedTabTotalPages.wrappedValue > 0 {
                     HStack {
                         Button(action: previousPage) {
                             Image(systemName: "chevron.left")
                         }
-                        .disabled(selectedTab.currentPage <= 1)
+                        .disabled(selectedTabCurrentPage.wrappedValue <= 1)
                         
-                        Text("\(selectedTab.currentPage) / \(selectedTab.totalPages)")
+                        Text("\(selectedTabCurrentPage.wrappedValue) / \(selectedTabTotalPages.wrappedValue)")
                             .font(.caption)
                             .monospacedDigit()
                             .frame(minWidth: 60)
@@ -97,7 +97,7 @@ struct ContentView: View {
                         Button(action: nextPage) {
                             Image(systemName: "chevron.right")
                         }
-                        .disabled(selectedTab.currentPage >= selectedTab.totalPages)
+                        .disabled(selectedTabCurrentPage.wrappedValue >= selectedTabTotalPages.wrappedValue)
                     }
                     
                     Divider()
@@ -108,9 +108,9 @@ struct ContentView: View {
                         Button(action: zoomOut) {
                             Image(systemName: "minus.magnifyingglass")
                         }
-                        .disabled(selectedTab.zoomLevel <= 0.25)
+                        .disabled(selectedTabZoomLevel.wrappedValue <= 0.25)
                         
-                        Text("\(Int(selectedTab.zoomLevel * 100))%")
+                        Text("\(Int(selectedTabZoomLevel.wrappedValue * 100))%")
                             .font(.caption)
                             .monospacedDigit()
                             .frame(minWidth: 40)
@@ -118,7 +118,7 @@ struct ContentView: View {
                         Button(action: zoomIn) {
                             Image(systemName: "plus.magnifyingglass")
                         }
-                        .disabled(selectedTab.zoomLevel >= 5.0)
+                        .disabled(selectedTabZoomLevel.wrappedValue >= 5.0)
                         
                         Button(action: resetZoom) {
                             Image(systemName: "1.magnifyingglass")
@@ -199,6 +199,14 @@ struct ContentView: View {
         .onDrop(of: [.pdf], isTargeted: nil) { providers in
             handleDrop(providers)
         }
+        .onReceive(selectedTab.$currentPage) { newPage in
+            // Force UI update when page changes from scrolling
+            updateTrigger += 1
+        }
+        .onReceive(selectedTab.$totalPages) { newTotal in
+            // Force UI update when total pages changes
+            updateTrigger += 1
+        }
     }
     
     // MARK: - Actions
@@ -261,13 +269,15 @@ struct ContentView: View {
     
     private func previousPage() {
         if selectedTab.currentPage > 1 {
-            selectedTab.currentPage -= 1
+            selectedTabCurrentPage.wrappedValue = selectedTab.currentPage - 1
+            updateTrigger += 1 // Force PDFViewWrapper update
         }
     }
     
     private func nextPage() {
         if selectedTab.currentPage < selectedTab.totalPages {
-            selectedTab.currentPage += 1
+            selectedTabCurrentPage.wrappedValue = selectedTab.currentPage + 1
+            updateTrigger += 1 // Force PDFViewWrapper update
         }
     }
     

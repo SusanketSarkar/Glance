@@ -161,8 +161,10 @@ struct PDFViewWrapper: NSViewRepresentable {
                   let document = pdfView.document else { return }
             
             let pageIndex = document.index(for: currentPage)
+            let newPageNumber = pageIndex + 1
+            
             DispatchQueue.main.async {
-                self.parent.currentPage = pageIndex + 1
+                self.parent.currentPage = newPageNumber
                 self.parent.totalPages = document.pageCount
             }
         }
