@@ -1,6 +1,22 @@
-# Glance - AI-Powered OFFLINE PDF Reader for macOS
+<p align="center">
+  <img src="assets/glance.png" width="150"/>
+  <p align="center">A minimalist, offline, privacy-first AI-powered PDF reader for macOS</p>
 
-A minimalist, privacy-first PDF reader built for macOS with AI-powered features.
+  <p align="center">
+    <a href="https://github.com/SusanketSarkar/Glance/releases">
+      <img src="https://img.shields.io/github/v/release/SusanketSarkar/Glance?label=release"/>
+    </a>
+    <a href="http://discordapp.com/users/1236004126878335150">
+      <img src="https://img.shields.io/badge/Join%20our-Discord-5865F2?logo=discord&logoColor=white"/>
+    </a>
+    <a href="https://x.com/positivlyskewed">
+      <img src="https://img.shields.io/badge/Follow%20on-X-000000?logo=x&logoColor=white"/>
+    </a>
+    <a href="#">
+      <img src="https://img.shields.io/badge/license-MIT-green"/>
+    </a>
+  </p>
+</p>
 
 ## Features
 
@@ -9,7 +25,7 @@ A minimalist, privacy-first PDF reader built for macOS with AI-powered features.
 - **Fast PDF Viewing** - Powered by Apple's PDFKit with smooth continuous scrolling
 - **Search Functionality** - Find text within documents quickly
 - **Drag & Drop Support** - Simply drag PDF files into the app
-- **✅ Native Trackpad Gestures** - Perfect pinch-to-zoom with two-finger trackpad gestures
+- **Native Trackpad Gestures** - Perfect pinch-to-zoom with two-finger trackpad gestures
 - **Page Navigation** - Easy navigation through multi-page documents
 - **Dark Mode Support** - Automatically follows system appearance
 

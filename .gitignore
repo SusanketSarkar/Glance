@@ -199,3 +199,11 @@ site/
 # OS generated files
 Thumbs.db
 ehthumbs.db 
+
+
+# Environment variables
+.env
+/env
+
+# Notebooks
+notebooks/
