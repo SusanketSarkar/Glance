@@ -17,24 +17,7 @@ let package = Package(
         .executableTarget(
             name: "Glance",
             dependencies: [],
-            path: ".",
-            exclude: [
-                "docs",
-                "build.sh",
-                "Glance.entitlements",
-                "Info.plist",
-                "README.md"
-            ],
-            sources: [
-                "GlanceApp.swift",
-                "ContentView.swift",
-                "PDFViewWrapper.swift",
-                "DocumentTab.swift",
-                "TabBarView.swift",
-                "TitleBarTabView.swift",
-                "FloatingContextToolbar.swift",
-                "ColorPickerPopup.swift"
-            ]
+            path: "src"
         )
     ]
 ) 
