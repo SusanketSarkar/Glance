@@ -25,10 +25,11 @@ struct ColorPickerPopup: View {
                     ColorButton(
                         color: colorInfo.color,
                         name: colorInfo.name,
-                        onTap: {
-                            onColorSelected(colorInfo.color)
-                            dismissPopup()
-                        }
+                                                    onTap: {
+                                print("🟢 Color selected: \(colorInfo.color)")
+                                onColorSelected(colorInfo.color)
+                                dismissPopup()
+                            }
                     )
                 }
             }
@@ -49,13 +50,14 @@ struct ColorPickerPopup: View {
             .animation(.easeOut(duration: 0.2), value: animationOpacity)
             .animation(.easeOut(duration: 0.2), value: animationScale)
             .animation(.easeOut(duration: 0.2), value: animationOffset)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    animationOpacity = 1.0
-                    animationScale = 1.0
-                    animationOffset = 0
-                }
-            }
+                               .onAppear {
+                       print("🟢 ColorPickerPopup appeared")
+                       withAnimation(.easeOut(duration: 0.2)) {
+                           animationOpacity = 1.0
+                           animationScale = 1.0
+                           animationOffset = 0
+                       }
+                   }
             .onDisappear {
                 withAnimation(.easeOut(duration: 0.15)) {
                     animationOpacity = 0.0

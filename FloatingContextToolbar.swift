@@ -4,15 +4,17 @@ struct FloatingContextToolbar: View {
     let selectedTextFrame: CGRect
     let containerBounds: CGRect
     @Binding var isVisible: Bool
-    let onUnderline: () -> Void
-    let onHighlight: (Color) -> Void // Changed to accept color parameter
+    let onUnderline: (Color) -> Void
+    let onHighlight: (Color) -> Void
     let onDismiss: () -> Void
     
     @State private var animationOffset: CGFloat = 10
     @State private var animationScale: CGFloat = 0.9
     @State private var animationOpacity: Double = 0
-    @State private var isColorPickerVisible: Bool = false
+    @State private var isHighlightPickerVisible: Bool = false
+    @State private var isUnderlinePickerVisible: Bool = false
     @State private var highlightButtonFrame: CGRect = .zero
+    @State private var underlineButtonFrame: CGRect = .zero
     
     var toolbarPosition: CGPoint {
         calculatePosition()
@@ -27,7 +29,46 @@ struct FloatingContextToolbar: View {
                     ContextToolbarButton(
                         icon: "underline",
                         tooltip: "Underline",
-                        action: onUnderline
+                        action: {
+                            print("🟡 Underline button clicked - showing color picker")
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                isUnderlinePickerVisible = true
+                                isHighlightPickerVisible = false
+                            }
+                        }
+                    )
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onAppear {
+                                    let localFrame = geometry.frame(in: .local)
+                                    let globalPosition = toolbarPosition
+                                    underlineButtonFrame = CGRect(
+                                        x: globalPosition.x + localFrame.minX - 14,
+                                        y: globalPosition.y + localFrame.minY - 14,
+                                        width: localFrame.width,
+                                        height: localFrame.height
+                                    )
+                                }
+                                .onChange(of: geometry.frame(in: .local)) { newFrame in
+                                    let globalPosition = toolbarPosition
+                                    underlineButtonFrame = CGRect(
+                                        x: globalPosition.x + newFrame.minX - 14,
+                                        y: globalPosition.y + newFrame.minY - 14,
+                                        width: newFrame.width,
+                                        height: newFrame.height
+                                    )
+                                }
+                                .onChange(of: toolbarPosition) { newPosition in
+                                    let localFrame = geometry.frame(in: .local)
+                                    underlineButtonFrame = CGRect(
+                                        x: newPosition.x + localFrame.minX - 14,
+                                        y: newPosition.y + localFrame.minY - 14,
+                                        width: localFrame.width,
+                                        height: localFrame.height
+                                    )
+                                }
+                        }
                     )
                     
                     // Highlight Button
@@ -35,9 +76,10 @@ struct FloatingContextToolbar: View {
                         icon: "pencil.tip",
                         tooltip: "Highlight",
                         action: {
-                            // Show color picker instead of calling onHighlight directly
+                            // Show color picker for highlight
                             withAnimation(.easeOut(duration: 0.2)) {
-                                isColorPickerVisible = true
+                                isHighlightPickerVisible = true
+                                isUnderlinePickerVisible = false
                             }
                         }
                     )
@@ -83,15 +125,24 @@ struct FloatingContextToolbar: View {
                 .animation(.easeOut(duration: 0.2), value: animationScale)
                 .animation(.easeOut(duration: 0.2), value: animationOffset)
                 
-                // Color picker popup
+                // Color picker popup for highlight
                 ColorPickerPopup(
-                    isVisible: $isColorPickerVisible,
+                    isVisible: $isHighlightPickerVisible,
                     onColorSelected: { color in
                         onHighlight(color)
-                        // Hide color picker after selection
-                        isColorPickerVisible = false
+                        isHighlightPickerVisible = false
                     },
                     buttonFrame: highlightButtonFrame
+                )
+                
+                // Color picker popup for underline
+                ColorPickerPopup(
+                    isVisible: $isUnderlinePickerVisible,
+                    onColorSelected: { color in
+                        onUnderline(color)
+                        isUnderlinePickerVisible = false
+                    },
+                    buttonFrame: underlineButtonFrame
                 )
             }
             .onAppear {
@@ -106,7 +157,8 @@ struct FloatingContextToolbar: View {
                     animationOpacity = 0.0
                     animationScale = 0.9
                     animationOffset = 10
-                    isColorPickerVisible = false // Hide color picker when toolbar disappears
+                    isHighlightPickerVisible = false
+                    isUnderlinePickerVisible = false
                 }
             }
         }
@@ -202,9 +254,9 @@ struct FloatingContextToolbar_Previews: PreviewProvider {
                 selectedTextFrame: CGRect(x: 100, y: 150, width: 200, height: 40),
                 containerBounds: CGRect(x: 0, y: 0, width: 400, height: 300),
                 isVisible: .constant(true),
-                onUnderline: { print("Underline") },
-                onHighlight: { color in print("Highlight with color: \(color)") },
-                onDismiss: { print("Dismiss") }
+                onUnderline: { color in /* Preview - underline with color */ },
+                onHighlight: { color in /* Preview - highlight with color */ },
+                onDismiss: { /* Preview - dismiss */ }
             )
         }
         .frame(width: 400, height: 300)

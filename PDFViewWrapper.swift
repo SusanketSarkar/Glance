@@ -102,6 +102,7 @@ struct PDFViewWrapper: View {
     @State private var containerBounds: CGRect = .zero
     @State private var selectionTimer: Timer?
     @State private var highlightColor: Color?
+    @State private var underlineRequested: Bool = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -117,14 +118,22 @@ struct PDFViewWrapper: View {
                     isToolbarVisible: $isToolbarVisible,
                     selectedText: $selectedText,
                     containerBounds: $containerBounds,
-                    highlightColor: $highlightColor
+                    highlightColor: $highlightColor,
+                    underlineRequested: $underlineRequested
                 )
                 
                 FloatingContextToolbar(
                     selectedTextFrame: selectedTextFrame,
                     containerBounds: containerBounds,
                     isVisible: $isToolbarVisible,
-                    onUnderline: { handleUnderline() },
+                    onUnderline: { color in
+                        print("🟡 onUnderline callback called with color: \(color)")
+                        // Trigger underline flow; coordinator will pick up via underlineRequested flag
+                        // Store the color temporarily in highlightColor to be consumed by performUnderline
+                        highlightColor = color
+                        print("🟡 highlightColor set to: \(String(describing: highlightColor))")
+                        handleUnderline()
+                    },
                     onHighlight: { color in handleHighlight(color: color) },
                     onDismiss: { dismissToolbar() }
                 )
@@ -139,9 +148,11 @@ struct PDFViewWrapper: View {
     }
     
     private func handleUnderline() {
-        print("Underline text: \(selectedText)")
-        // TODO: Implement text underlining
-        dismissToolbar()
+        print("🟡 handleUnderline called")
+        // default to black if no color chosen; the popup will provide chosen color normally
+        underlineRequested = true
+        print("🟡 underlineRequested set to: \(underlineRequested)")
+        // Don't dismiss toolbar immediately - let coordinator handle underline first
     }
     
     private func handleHighlight(color: Color) {
@@ -174,6 +185,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
     @Binding var selectedText: String
     @Binding var containerBounds: CGRect
     @Binding var highlightColor: Color?
+    @Binding var underlineRequested: Bool
 
     func makeNSView(context: Context) -> TrackpadEnabledView {
         let containerView = TrackpadEnabledView()
@@ -258,7 +270,8 @@ struct PDFViewRepresentable: NSViewRepresentable {
             isToolbarVisible: $isToolbarVisible,
             selectedText: $selectedText,
             containerBounds: $containerBounds,
-            highlightColor: $highlightColor
+            highlightColor: $highlightColor,
+            underlineRequested: $underlineRequested
         )
         
         // Update document if it has changed (crucial for tab switching)
@@ -309,12 +322,13 @@ struct PDFViewRepresentable: NSViewRepresentable {
         var selectedText: Binding<String>?
         var containerBounds: Binding<CGRect>?
         var highlightColor: Binding<Color?>?
+        var underlineRequested: Binding<Bool>?
         
         init(_ parent: PDFViewRepresentable) {
             self.parent = parent
         }
         
-        func updateBindings(selectedTextFrame: Binding<CGRect>, isToolbarVisible: Binding<Bool>, selectedText: Binding<String>, containerBounds: Binding<CGRect>, highlightColor: Binding<Color?>?) {
+        func updateBindings(selectedTextFrame: Binding<CGRect>, isToolbarVisible: Binding<Bool>, selectedText: Binding<String>, containerBounds: Binding<CGRect>, highlightColor: Binding<Color?>?, underlineRequested: Binding<Bool>?) {
             self.selectedTextFrame = selectedTextFrame
             self.isToolbarVisible = isToolbarVisible
             self.selectedText = selectedText
@@ -332,6 +346,22 @@ struct PDFViewRepresentable: NSViewRepresentable {
                 }
             } else {
                 self.highlightColor = highlightColor
+            }
+            
+            // Underline request edge-triggered
+            if let underlineBinding = underlineRequested, underlineBinding.wrappedValue {
+                print("🟠 Underline request triggered! Color: \(String(describing: self.highlightColor?.wrappedValue))")
+                // If a highlight color was recently picked, reuse it for underline if desired.
+                // Otherwise default color is used in performUnderline.
+                performUnderline(with: self.highlightColor?.wrappedValue)
+                // Dismiss toolbar after underline is complete
+                dismissToolbar()
+                DispatchQueue.main.async {
+                    underlineBinding.wrappedValue = false
+                }
+                self.underlineRequested = underlineRequested
+            } else {
+                self.underlineRequested = underlineRequested
             }
         }
         
@@ -419,11 +449,15 @@ struct PDFViewRepresentable: NSViewRepresentable {
                         }
                     }
                 } else {
-                    // Clear stored selection
-                    self.currentSelection = nil
-                    self.currentPDFView = nil
-                    // Hide the toolbar when no text is selected
-                    self.dismissToolbar()
+                    // Only clear stored selection if toolbar is not visible
+                    // This prevents clearing the selection when user interacts with toolbar buttons
+                    if self.isToolbarVisible?.wrappedValue != true {
+                        // Clear stored selection
+                        self.currentSelection = nil
+                        self.currentPDFView = nil
+                        // Hide the toolbar when no text is selected
+                        self.dismissToolbar()
+                    }
                 }
             }
         }
@@ -508,38 +542,86 @@ struct PDFViewRepresentable: NSViewRepresentable {
         
         private func performHighlighting(with color: Color) {
             guard let pdfView = currentPDFView,
-                  let selection = pdfView.currentSelection else { return }
-            
-            print("🎨 Performing highlighting with color: \(color)")
-            
-            // Find the page containing the selection
-            for pageIndex in 0..<pdfView.document!.pageCount {
-                if let page = pdfView.document!.page(at: pageIndex) {
-                    let selectionBounds = selection.bounds(for: page)
-                    if !selectionBounds.isEmpty {
-                        // Create a highlight annotation
-                        let annotation = PDFAnnotation(bounds: selectionBounds, forType: .highlight, withProperties: nil)
-                        
-                        // Convert SwiftUI Color to NSColor
-                        let nsColor = NSColor(color)
-                        annotation.color = nsColor
-                        
-                        // Set annotation properties
-                        annotation.contents = "Highlighted text: \(selection.string ?? "")"
-                        
-                        // Add annotation to the page
-                        page.addAnnotation(annotation)
-                        
-                        print("✅ Added highlight annotation to page \(pageIndex)")
-                        break
-                    }
+                  let selection = pdfView.currentSelection,
+                  let _ = pdfView.document else { return }
+
+            // Build fine-grained highlights: split into line selections
+            let lineSelections: [PDFSelection] = selection.selectionsByLine()
+
+            for lineSelection in lineSelections {
+                // Iterate pages containing this selection
+                for page in lineSelection.pages {
+                    let boundsOnPage = lineSelection.bounds(for: page)
+                    if boundsOnPage.isEmpty { continue }
+
+                    // Create highlight markup constrained to the exact line bounds
+                    let annotation = PDFAnnotation(bounds: boundsOnPage, forType: .highlight, withProperties: nil)
+                    annotation.color = NSColor(color)
+                    annotation.contents = (lineSelection.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    // Note: Some PDFKit symbols for per-glyph quads are not available on all targets.
+                    // To keep compatibility, we use the per-line bounds here so only the selected line areas are highlighted.
+
+                    page.addAnnotation(annotation)
                 }
             }
-            
+
             // Clear the selection after highlighting
             DispatchQueue.main.async {
                 pdfView.clearSelection()
             }
+        }
+        
+        private func performUnderline(with color: Color? = nil) {
+            print("🔵 performUnderline called with color: \(String(describing: color))")
+            guard let pdfView = currentPDFView,
+                  let selection = pdfView.currentSelection,
+                  let _ = pdfView.document else { 
+                print("🔴 performUnderline: guard failed - no pdfView, selection, or document")
+                print("🔴 currentPDFView: \(String(describing: currentPDFView))")
+                print("🔴 pdfView.currentSelection: \(String(describing: currentPDFView?.currentSelection))")
+                return 
+            }
+
+            print("🔵 Selection text: '\(selection.string ?? "nil")'")
+            
+            // Split selection into lines so multi-line selections get multiple underlines
+            let lineSelections = selection.selectionsByLine()
+            print("🔵 Line selections count: \(lineSelections.count)")
+
+            for lineSelection in lineSelections {
+                for page in lineSelection.pages {
+                    let r = lineSelection.bounds(for: page)
+                    if r.isEmpty { 
+                        print("🔴 Empty bounds for line selection, skipping")
+                        continue 
+                    }
+
+                    print("🔵 Creating underline annotation with bounds: \(r)")
+                    
+                    // Create underline annotation for this line
+                    let annotation = PDFAnnotation(bounds: r, forType: .underline, withProperties: nil)
+                    let finalColor = (color != nil) ? NSColor(color!).withAlphaComponent(1.0) : NSColor.black.withAlphaComponent(0.95)
+                    annotation.color = finalColor
+                    print("🔵 Annotation color set to: \(finalColor)")
+
+                    // Provide quadrilateral points covering the text line so PDFKit renders a true underline
+                    // Order: top-left, top-right, bottom-left, bottom-right
+                    let quads: [NSValue] = [
+                        NSValue(point: NSPoint(x: r.minX, y: r.maxY)),
+                        NSValue(point: NSPoint(x: r.maxX, y: r.maxY)),
+                        NSValue(point: NSPoint(x: r.minX, y: r.minY)),
+                        NSValue(point: NSPoint(x: r.maxX, y: r.minY))
+                    ]
+                    annotation.quadrilateralPoints = quads
+                    print("🔵 Quadrilateral points set: \(quads)")
+
+                    page.addAnnotation(annotation)
+                    print("🔵 Annotation added to page")
+                }
+            }
+            
+            print("🔵 performUnderline completed")
         }
         
         func dismissToolbar() {
