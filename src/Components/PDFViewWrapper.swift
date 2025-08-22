@@ -141,6 +141,17 @@ struct PDFViewWrapper: View {
                     onHighlight: { color in handleHighlight(color: color) },
                     onDismiss: { dismissToolbar() }
                 )
+                
+                // 🤖 ADD THIS: AI Icon at bottom right
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        AIFloatingIcon()
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 20)
+                    }
+                }
             }
             .onAppear {
                 containerBounds = geometry.frame(in: .local)
