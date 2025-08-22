@@ -22,7 +22,7 @@ struct AIFloatingIcon: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 50, height: 50)
+                    .frame(width: 35, height: 35)
                     .scaleEffect(isHovered ? 1.1 : 1.0)
                     .scaleEffect(pulseAnimation ? 1.02 : 1.0)
                 
@@ -31,15 +31,6 @@ struct AIFloatingIcon: View {
                     .font(.system(size: 22, weight: .medium))
                     .foregroundColor(.white)
                     .scaleEffect(isHovered ? 1.1 : 1.0)
-                
-                // Subtle sparkle overlay when hovered
-                if isHovered {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 12, weight: .light))
-                        .foregroundColor(.white.opacity(0.8))
-                        .offset(x: 12, y: -12)
-                        .animation(.easeInOut(duration: 0.3), value: isHovered)
-                }
                 
                 // Pulse ring effect
                 if pulseAnimation {
