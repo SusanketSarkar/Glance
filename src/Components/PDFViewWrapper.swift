@@ -89,6 +89,8 @@ class TrackpadEnabledView: NSView {
 
 struct PDFViewWrapper: View {
     let document: PDFDocument
+    let documentName: String
+    let documentURL: URL?
     @Binding var currentPage: Int
     @Binding var totalPages: Int
     @Binding var zoomLevel: CGFloat
@@ -109,6 +111,8 @@ struct PDFViewWrapper: View {
             ZStack(alignment: .topLeading) {
                 PDFViewRepresentable(
                     document: document,
+                    documentName: documentName,
+                    documentURL: documentURL,
                     currentPage: $currentPage,
                     totalPages: $totalPages,
                     zoomLevel: $zoomLevel,
@@ -173,6 +177,8 @@ struct PDFViewWrapper: View {
 
 struct PDFViewRepresentable: NSViewRepresentable {
     let document: PDFDocument
+    let documentName: String
+    let documentURL: URL?
     @Binding var currentPage: Int
     @Binding var totalPages: Int
     @Binding var zoomLevel: CGFloat
@@ -543,7 +549,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
         private func performHighlighting(with color: Color) {
             guard let pdfView = currentPDFView,
                   let selection = pdfView.currentSelection,
-                  let _ = pdfView.document else { return }
+                  let document = pdfView.document else { return }
 
             // Build fine-grained highlights: split into line selections
             let lineSelections: [PDFSelection] = selection.selectionsByLine()
@@ -563,6 +569,26 @@ struct PDFViewRepresentable: NSViewRepresentable {
                     // To keep compatibility, we use the per-line bounds here so only the selected line areas are highlighted.
 
                     page.addAnnotation(annotation)
+                    
+                    // Save annotation to persistent storage
+                    let pageIndex = document.index(for: page)
+                    if pageIndex != NSNotFound {
+                        let annotationData = AnnotationData(
+                            type: .highlight,
+                            color: ColorData(from: color),
+                            bounds: RectData(from: boundsOnPage),
+                            pageIndex: pageIndex,
+                            text: lineSelection.string?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        )
+                        
+                        let documentName = self.parent.documentName
+                        if let url = self.parent.documentURL {
+                            AnnotationManager.shared.saveAnnotation(annotationData, forURL: url, documentName: documentName)
+                        } else {
+                            AnnotationManager.shared.saveAnnotation(annotationData, for: document, documentName: documentName)
+                        }
+                        print("💾 Saved highlight annotation to persistent storage")
+                    }
                 }
             }
 
@@ -576,7 +602,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
             print("🔵 performUnderline called with color: \(String(describing: color))")
             guard let pdfView = currentPDFView,
                   let selection = pdfView.currentSelection,
-                  let _ = pdfView.document else { 
+                  let document = pdfView.document else { 
                 print("🔴 performUnderline: guard failed - no pdfView, selection, or document")
                 print("🔴 currentPDFView: \(String(describing: currentPDFView))")
                 print("🔴 pdfView.currentSelection: \(String(describing: currentPDFView?.currentSelection))")
@@ -618,6 +644,30 @@ struct PDFViewRepresentable: NSViewRepresentable {
 
                     page.addAnnotation(annotation)
                     print("🔵 Annotation added to page")
+                    
+                    // Save annotation to persistent storage
+                    let pageIndex = document.index(for: page)
+                    if pageIndex != NSNotFound {
+                        let swiftUIColor = color ?? Color.black
+                        let quadPoints = quads.map { PointData(fromNSPoint: $0.pointValue) }
+                        
+                        let annotationData = AnnotationData(
+                            type: .underline,
+                            color: ColorData(from: swiftUIColor),
+                            bounds: RectData(from: r),
+                            pageIndex: pageIndex,
+                            text: lineSelection.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+                            quadrilateralPoints: quadPoints
+                        )
+                        
+                        let documentName = self.parent.documentName
+                        if let url = self.parent.documentURL {
+                            AnnotationManager.shared.saveAnnotation(annotationData, forURL: url, documentName: documentName)
+                        } else {
+                            AnnotationManager.shared.saveAnnotation(annotationData, for: document, documentName: documentName)
+                        }
+                        print("💾 Saved underline annotation to persistent storage")
+                    }
                 }
             }
             
@@ -656,6 +706,8 @@ struct PDFViewWrapper_Previews: PreviewProvider {
            let document = PDFDocument(url: url) {
             PDFViewWrapper(
                 document: document,
+                documentName: "Sample PDF",
+                documentURL: nil,
                 currentPage: .constant(1),
                 totalPages: .constant(document.pageCount),
                 zoomLevel: .constant(1.0),

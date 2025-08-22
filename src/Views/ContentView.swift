@@ -139,7 +139,9 @@ struct ContentView: View {
             
             // PDF Content
             if let document = selectedTab.document {
-                PDFViewWrapper(document: document, 
+                PDFViewWrapper(document: document,
+                             documentName: selectedTab.title,
+                             documentURL: selectedTab.documentURL,
                              currentPage: selectedTabCurrentPage, 
                              totalPages: selectedTabTotalPages,
                              zoomLevel: selectedTabZoomLevel,
